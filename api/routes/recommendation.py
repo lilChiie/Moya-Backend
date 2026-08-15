@@ -197,6 +197,8 @@ def create_recommendation():
         set(accessibility_ids)
     )
 
+    accessibility_id = accessibility_ids[0]
+
 
     if budget < 0:
 
@@ -326,6 +328,8 @@ def create_recommendation():
 
     recom_request = RecomRequest(
         user_id=user_id,
+
+        accessibility_id=accessibility_id,
 
         tourism_id=tourism_id,
 
