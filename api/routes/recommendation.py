@@ -17,8 +17,7 @@ from api.ai.dss import run_dss
 
 recommendation_bp = Blueprint(
     "recommendation",
-    __name__,
-    url_prefix="/api/recommendation"
+    __name__
 )
 
 
