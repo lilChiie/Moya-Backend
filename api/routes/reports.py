@@ -3,6 +3,7 @@ from werkzeug.utils import secure_filename
 from pathlib import Path
 from datetime import datetime
 from decimal import Decimal
+from datetime import timedelta
 
 from api.models import db, Report, User, Destination
 from api.ai.yolo import analyze_photo_for_trash
@@ -57,6 +58,292 @@ def get_reports():
         "success": True,
         "data": [report_to_dict(report) for report in reports]
     }), 200
+
+
+@reports_bp.route("/trend", methods=["GET"])
+def get_reports_trend():
+
+    period = request.args.get(
+        "period",
+        "daily"
+    ).lower()
+
+    allowed_periods = {
+        "daily",
+        "weekly",
+        "monthly"
+    }
+
+    if period not in allowed_periods:
+        return jsonify({
+            "success": False,
+            "message": (
+                "Period must be daily, weekly, or monthly"
+            )
+        }), 400
+
+    try:
+
+        today = datetime.now().date()
+
+        if period == "daily":
+
+            # Senin minggu ini
+            week_start = (
+                today
+                - timedelta(
+                    days=today.weekday()
+                )
+            )
+
+            # Senin sampai Minggu
+            dates = [
+                week_start + timedelta(days=i)
+                for i in range(7)
+            ]
+
+            # Minggu berikutnya
+            week_end = (
+                week_start
+                + timedelta(days=7)
+            )
+
+            reports = (
+                Report.query
+                .filter(
+                    Report.created_at >= week_start,
+                    Report.created_at < week_end
+                )
+                .all()
+            )
+
+            counts = {
+                date: 0
+                for date in dates
+            }
+
+            for report in reports:
+
+                report_date = (
+                    report.created_at.date()
+                )
+
+                if report_date in counts:
+                    counts[report_date] += 1
+
+            data = [
+                {
+                    "label": date.strftime("%a"),
+                    "date": date.isoformat(),
+                    "count": counts[date]
+                }
+                for date in dates
+            ]
+
+        elif period == "weekly":
+
+            first_day = today.replace(
+                day=1
+            )
+
+            # Hari pertama bulan berikutnya
+            if today.month == 12:
+
+                next_month = today.replace(
+                    year=today.year + 1,
+                    month=1,
+                    day=1
+                )
+
+            else:
+
+                next_month = today.replace(
+                    month=today.month + 1,
+                    day=1
+                )
+
+            reports = (
+                Report.query
+                .filter(
+                    Report.created_at >= first_day,
+                    Report.created_at < next_month
+                )
+                .all()
+            )
+
+            counts = {
+                1: 0,
+                2: 0,
+                3: 0,
+                4: 0
+            }
+
+            for report in reports:
+
+                day = (
+                    report.created_at.day
+                )
+
+                if day <= 7:
+                    week = 1
+
+                elif day <= 14:
+                    week = 2
+
+                elif day <= 21:
+                    week = 3
+
+                else:
+                    week = 4
+
+                counts[week] += 1
+
+            data = [
+                {
+                    "label": f"W{week}",
+                    "week": week,
+                    "count": counts[week]
+                }
+                for week in range(1, 5)
+            ]
+
+        else:
+
+            # 1 Januari tahun ini
+            start_date = datetime(
+                today.year,
+                1,
+                1
+            )
+
+            # 1 Januari tahun depan
+            end_date = datetime(
+                today.year + 1,
+                1,
+                1
+            )
+
+            reports = (
+                Report.query
+                .filter(
+                    Report.created_at >= start_date,
+                    Report.created_at < end_date
+                )
+                .all()
+            )
+
+            counts = {
+                month: 0
+                for month in range(1, 13)
+            }
+
+            for report in reports:
+
+                month = (
+                    report.created_at.month
+                )
+
+                counts[month] += 1
+
+            data = [
+                {
+                    "label": datetime(
+                        today.year,
+                        month,
+                        1
+                    ).strftime("%b"),
+
+                    "month": month,
+
+                    "count": counts[month]
+                }
+                for month in range(1, 13)
+            ]
+
+        values = [
+            item["count"]
+            for item in data
+        ]
+
+        midpoint = len(values) // 2
+
+        previous_values = (
+            values[:midpoint]
+        )
+
+        current_values = (
+            values[midpoint:]
+        )
+
+        previous_total = sum(
+            previous_values
+        )
+
+        current_total = sum(
+            current_values
+        )
+
+
+        if previous_total == 0:
+
+            if current_total > 0:
+
+                percentage = 100
+                direction = "up"
+
+            else:
+
+                percentage = 0
+                direction = "stable"
+
+        else:
+
+            percentage = round(
+                (
+                    (
+                        current_total
+                        - previous_total
+                    )
+                    / previous_total
+                )
+                * 100
+            )
+
+            if percentage > 0:
+
+                direction = "up"
+
+            elif percentage < 0:
+
+                direction = "down"
+
+            else:
+
+                direction = "stable"
+
+
+        return jsonify({
+            "success": True,
+
+            "period": period,
+
+            "data": data,
+
+            "trend": {
+                "percentage": abs(
+                    percentage
+                ),
+                "direction": direction
+            }
+        }), 200
+
+    except Exception as e:
+
+        return jsonify({
+            "success": False,
+            "message": "Failed to get reports trend",
+            "error": str(e)
+        }), 500
 
 @reports_bp.route("/<int:report_id>", methods=["GET"])
 def get_report(report_id):
@@ -281,3 +568,4 @@ def get_latest_reports():
             "message": "Failed to get latest reports",
             "error": str(e)
         }), 500
+
