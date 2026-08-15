@@ -1,9 +1,5 @@
-flask
-flask-cors
-python-dotenv
+Flask
 Flask-SQLAlchemy
-mysql-connector-python
-Flask-JWT-Extended
-Flask-Bcrypt
-Werkzeug
+python-dotenv
+PyMySQL
 ultralytics
