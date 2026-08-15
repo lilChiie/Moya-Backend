@@ -243,3 +243,41 @@ def delete_report(report_id):
         "success": True,
         "message": "Report deleted successfully"
     }), 200
+
+@reports_bp.route("/latest", methods=["GET"])
+def get_latest_reports():
+
+    try:
+        limit = request.args.get("limit", 5, type=int)
+
+        if limit <= 0:
+            return jsonify({
+                "success": False,
+                "message": "Limit must be greater than 0"
+            }), 400
+
+        # Batasi agar tidak terlalu banyak data
+        limit = min(limit, 5)
+
+        reports = (
+            Report.query
+            .order_by(Report.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+        return jsonify({
+            "success": True,
+            "data": [
+                report_to_dict(report)
+                for report in reports
+            ]
+        }), 200
+
+    except Exception as e:
+
+        return jsonify({
+            "success": False,
+            "message": "Failed to get latest reports",
+            "error": str(e)
+        }), 500
