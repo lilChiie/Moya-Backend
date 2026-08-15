@@ -11,6 +11,7 @@ from api.models import (
 )
 
 from api.ai.yolo import analyze_photo_for_trash
+from models.notification import Notification
 
 
 reports_bp = Blueprint(
@@ -20,7 +21,7 @@ reports_bp = Blueprint(
 
 
 UPLOAD_FOLDER = Path(
-    "uploads/reports"
+    "static/uploads/reports"
 )
 
 UPLOAD_FOLDER.mkdir(
@@ -1012,7 +1013,7 @@ def create_report():
 
             image_url=(
 
-                f"/uploads/reports/"
+                f"/static/uploads/reports/"
                 f"{filename}"
 
             ),
@@ -1047,6 +1048,14 @@ def create_report():
         )
 
 
+        db.session.commit()
+
+        notif = Notification(
+            user_id=user_id,
+            title="Laporan Diterima",
+            description="Terima kasih! Laporan Anda telah berhasil dikirim dan sedang kami proses."
+        )
+        db.session.add(notif)
         db.session.commit()
 
         return jsonify({

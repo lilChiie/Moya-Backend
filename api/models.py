@@ -1,10 +1,9 @@
-from flask_sqlalchemy import SQLAlchemy
-
-db = SQLAlchemy()
-
-
-
-
+from api.extensions import db
+from models.user import User
+from models.destination import Destination
+from models.accessibility import Accessibility
+from models.tourism import Tourism
+from models.rank import Rank
 
 class Report(db.Model):
     __tablename__ = "reports"
@@ -34,8 +33,8 @@ class Report(db.Model):
         onupdate=db.func.current_timestamp()
     )
 
-    user = db.relationship("User", back_populates="reports")
-    destination = db.relationship("Destination", back_populates="reports")
+    user = db.relationship("User", backref="reports")
+    destination = db.relationship("Destination", backref="reports")
 
 
 class Review(db.Model):
@@ -49,8 +48,8 @@ class Review(db.Model):
     comment = db.Column(db.Text)
     created_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
 
-    user = db.relationship("User", back_populates="reviews")
-    destination = db.relationship("Destination", back_populates="reviews")
+    user = db.relationship("User", backref="reviews")
+    destination = db.relationship("Destination", backref="reviews")
     points = db.relationship(
         "UserPoint", back_populates="review", cascade="all, delete-orphan"
     )
@@ -70,7 +69,7 @@ class UserPoint(db.Model):
         onupdate=db.func.current_timestamp()
     )
 
-    user = db.relationship("User", back_populates="points")
+    user = db.relationship("User", backref="points")
     review = db.relationship("Review", back_populates="points")
 
 
@@ -84,8 +83,8 @@ class UserVisit(db.Model):
     )
     visited_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
 
-    user = db.relationship("User", back_populates="visits")
-    destination = db.relationship("Destination", back_populates="visits")
+    user = db.relationship("User", backref="visits")
+    destination = db.relationship("Destination", backref="visits")
 
 
 class RecomRequest(db.Model):
@@ -107,9 +106,9 @@ class RecomRequest(db.Model):
         onupdate=db.func.current_timestamp()
     )
 
-    user = db.relationship("User", back_populates="recom_requests")
-    accessibility = db.relationship("Accessibility", back_populates="recom_requests")
-    tourism = db.relationship("Tourism", back_populates="recom_requests")
+    user = db.relationship("User", backref="recom_requests")
+    accessibility = db.relationship("Accessibility", backref="recom_requests")
+    tourism = db.relationship("Tourism", backref="recom_requests")
     results = db.relationship(
         "RecomResult", back_populates="request", cascade="all, delete-orphan"
     )
@@ -132,7 +131,7 @@ class RecomResult(db.Model):
     created_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
 
     request = db.relationship("RecomRequest", back_populates="results")
-    destination = db.relationship("Destination", back_populates="recom_results")
+    destination = db.relationship("Destination", backref="recom_results")
 
 
 class Itinerary(db.Model):
@@ -152,7 +151,7 @@ class Itinerary(db.Model):
     detected_count = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
 
-    user = db.relationship("User", back_populates="itineraries")
+    user = db.relationship("User", backref="itineraries")
     recom_request = db.relationship("RecomRequest", back_populates="itineraries")
     items = db.relationship(
         "ItineraryItem", back_populates="itinerary", cascade="all, delete-orphan"
@@ -179,4 +178,4 @@ class ItineraryItem(db.Model):
     )
 
     itinerary = db.relationship("Itinerary", back_populates="items")
-    destination = db.relationship("Destination", back_populates="itinerary_items")
+    destination = db.relationship("Destination", backref="itinerary_items")

@@ -2,10 +2,10 @@ from math import radians, sin, cos, sqrt, atan2
 
 from api.models import (
     Destination,
-    Report,
-    DestinationTourism,
-    DestinationAccessibility
+    Report
 )
+from models.destination import destination_tourisms, destination_accessibilities
+from api.extensions import db
 
 
 WEIGHTS = {
@@ -78,13 +78,13 @@ def calculate_accessibility_score(
     if not accessibility_ids:
         return 0.0
 
-    destination_accessibilities = (
-        DestinationAccessibility.query
+    destination_accessibilities_data = (
+        db.session.query(destination_accessibilities)
         .filter(
-            DestinationAccessibility.destination_id
+            destination_accessibilities.c.destination_id
             == destination_id,
 
-            DestinationAccessibility.accessibility_id.in_(
+            destination_accessibilities.c.accessibility_id.in_(
                 accessibility_ids
             )
         )
@@ -92,7 +92,7 @@ def calculate_accessibility_score(
     )
 
     matched_count = len(
-        destination_accessibilities
+        destination_accessibilities_data
     )
 
     total_requested = len(
@@ -285,17 +285,17 @@ def run_dss(
     )
 
 
-    destination_tourisms = (
-        DestinationTourism.query
-        .filter_by(
-            tourism_id=tourism_id
+    destination_tourisms_data = (
+        db.session.query(destination_tourisms)
+        .filter(
+            destination_tourisms.c.tourism_id == tourism_id
         )
         .all()
     )
 
     destination_ids = [
         item.destination_id
-        for item in destination_tourisms
+        for item in destination_tourisms_data
     ]
 
     if not destination_ids:
