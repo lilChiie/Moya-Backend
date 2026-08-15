@@ -1,0 +1,9 @@
+__pycache__/
+venv
+venv/
+.env
+.env.*
+uploads/
+*.sqlite3
+*.db
+models/sentiment/model.safetensors
