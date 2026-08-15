@@ -15,10 +15,8 @@ from api.ai.yolo import analyze_photo_for_trash
 
 reports_bp = Blueprint(
     "reports",
-    __name__,
-    url_prefix="/reports"
+    __name__
 )
-
 
 
 UPLOAD_FOLDER = Path(
@@ -49,6 +47,7 @@ def allowed_file(filename):
         )[1].lower()
         in ALLOWED_EXTENSIONS
     )
+
 
 
 def report_to_dict(report):
@@ -103,38 +102,55 @@ def report_to_dict(report):
     }
 
 
-
 def update_cleanliness_score(
     destination_id
 ):
     """
-    Menghitung ulang cleanliness score
-    berdasarkan seluruh report pada destination.
+    Menghitung ulang kebersihan suatu destination
+    berdasarkan seluruh report yang dimiliki destination tersebut.
 
     Report score:
         0.10 = sedikit sampah
-        0.30 = ...
-        0.50 = ...
-        0.70 = ...
+        0.30 = sedikit
+        0.50 = sedang
+        0.70 = banyak
         1.00 = sangat banyak
 
     Semakin besar report.score:
         semakin kotor.
 
-    Cleanliness:
-        1 - rata-rata severity
+    Rumus:
 
-    Contoh:
+        average_severity =
+            total severity / jumlah report
 
-        report 1 = 0.10
-        report 2 = 0.50
+        cleanliness_score =
+            1 - average_severity
 
-        average = (0.10 + 0.50) / 2
-                = 0.30
 
-        cleanliness = 1 - 0.30
-                    = 0.70
+    Status:
+
+        0.70 - 1.00
+            Safe
+
+        0.40 - < 0.70
+            Needs Attention
+
+        0.00 - < 0.40
+            Needs Handling
     """
+
+
+    destination = Destination.query.get(
+        destination_id
+    )
+
+
+    if not destination:
+
+        raise ValueError(
+            "Destination not found"
+        )
 
 
     reports = (
@@ -147,49 +163,71 @@ def update_cleanliness_score(
 
 
 
+
     if not reports:
 
+        # Belum ada laporan
         cleanliness_score = 0.50
 
 
     else:
 
         total_severity = sum(
-            float(report.score or 0)
+
+            float(
+                report.score or 0
+            )
+
             for report in reports
+
         )
+
 
         average_severity = (
+
             total_severity
             / len(reports)
+
         )
+
 
         cleanliness_score = (
-            1 - average_severity
+
+            1
+            - average_severity
+
         )
 
+    cleanliness_score = max(
 
-        # Pastikan 0 sampai 1
-        cleanliness_score = max(
-            0.0,
-            min(
-                1.0,
-                cleanliness_score
-            )
+        0.0,
+
+        min(
+            1.0,
+            cleanliness_score
         )
 
-
-    destination = (
-        Destination.query.get(
-            destination_id
-        )
     )
 
 
-    if not destination:
+    if cleanliness_score >= 0.70:
 
-        raise ValueError(
-            "Destination not found"
+        cleanliness_status = (
+            "Safe"
+        )
+
+
+    elif cleanliness_score >= 0.40:
+
+        cleanliness_status = (
+            "Needs Attention"
+        )
+
+
+    else:
+
+        cleanliness_status = (
+            "Needs Handling"
         )
 
 
@@ -197,8 +235,26 @@ def update_cleanliness_score(
         cleanliness_score
     )
 
+    destination.cleanliness_status = (
+        cleanliness_status
+    )
 
-    return cleanliness_score
+    return {
+
+        "cleanliness_score": (
+            cleanliness_score
+        ),
+
+        "cleanliness_status": (
+            cleanliness_status
+        ),
+
+        "report_count": (
+            len(reports)
+        )
+
+    }
+
 
 
 @reports_bp.route(
@@ -215,17 +271,22 @@ def get_reports():
         .all()
     )
 
+
     return jsonify({
 
         "success": True,
 
         "data": [
-            report_to_dict(report)
+
+            report_to_dict(
+                report
+            )
+
             for report in reports
+
         ]
 
     }), 200
-
 
 
 @reports_bp.route(
@@ -265,18 +326,19 @@ def get_reports_trend():
 
         today = datetime.now().date()
 
+
         if period == "daily":
 
-            # Senin minggu ini
             week_start = (
+
                 today
                 - timedelta(
                     days=today.weekday()
                 )
+
             )
 
 
-            # Senin sampai Minggu
             dates = [
 
                 week_start
@@ -287,36 +349,53 @@ def get_reports_trend():
             ]
 
 
-            # Minggu berikutnya
             week_end = (
+
                 week_start
                 + timedelta(days=7)
+
             )
 
 
             reports = (
+
                 Report.query
+
                 .filter(
+
                     Report.created_at
                     >= week_start,
 
                     Report.created_at
                     < week_end
+
                 )
+
                 .all()
+
             )
 
 
             counts = {
+
                 date: 0
+
                 for date in dates
+
             }
 
 
             for report in reports:
 
+                if not report.created_at:
+
+                    continue
+
+
                 report_date = (
+
                     report.created_at.date()
+
                 )
 
 
@@ -330,6 +409,7 @@ def get_reports_trend():
             data = [
 
                 {
+
                     "label": date.strftime(
                         "%a"
                     ),
@@ -341,11 +421,14 @@ def get_reports_trend():
                     "count": (
                         counts[date]
                     )
+
                 }
 
                 for date in dates
 
             ]
+
+
 
         elif period == "weekly":
 
@@ -354,7 +437,6 @@ def get_reports_trend():
             )
 
 
-            # Hari pertama bulan berikutnya
             if today.month == 12:
 
                 next_month = today.replace(
@@ -366,6 +448,7 @@ def get_reports_trend():
                     month=1,
 
                     day=1
+
                 )
 
             else:
@@ -377,19 +460,26 @@ def get_reports_trend():
                     ),
 
                     day=1
+
                 )
 
 
             reports = (
+
                 Report.query
+
                 .filter(
+
                     Report.created_at
                     >= first_day,
 
                     Report.created_at
                     < next_month
+
                 )
+
                 .all()
+
             )
 
 
@@ -404,6 +494,11 @@ def get_reports_trend():
 
 
             for report in reports:
+
+                if not report.created_at:
+
+                    continue
+
 
                 day = (
                     report.created_at.day
@@ -433,23 +528,29 @@ def get_reports_trend():
             data = [
 
                 {
-                    "label": f"W{week}",
+
+                    "label": (
+                        f"W{week}"
+                    ),
 
                     "week": week,
 
                     "count": (
                         counts[week]
                     )
+
                 }
 
-                for week in range(1, 5)
+                for week in range(
+                    1,
+                    5
+                )
 
             ]
 
 
         else:
 
-            # 1 Januari tahun ini
             start_date = datetime(
 
                 today.year,
@@ -457,10 +558,10 @@ def get_reports_trend():
                 1,
 
                 1
+
             )
 
 
-            # 1 Januari tahun depan
             end_date = datetime(
 
                 today.year + 1,
@@ -468,19 +569,26 @@ def get_reports_trend():
                 1,
 
                 1
+
             )
 
 
             reports = (
+
                 Report.query
+
                 .filter(
+
                     Report.created_at
                     >= start_date,
 
                     Report.created_at
                     < end_date
+
                 )
+
                 .all()
+
             )
 
 
@@ -498,9 +606,17 @@ def get_reports_trend():
 
             for report in reports:
 
+                if not report.created_at:
+
+                    continue
+
+
                 month = (
+
                     report.created_at.month
+
                 )
+
 
                 counts[month] += 1
 
@@ -508,6 +624,7 @@ def get_reports_trend():
             data = [
 
                 {
+
                     "label": datetime(
 
                         today.year,
@@ -523,6 +640,7 @@ def get_reports_trend():
                     "count": (
                         counts[month]
                     )
+
                 }
 
                 for month in range(
@@ -596,6 +714,7 @@ def get_reports_trend():
                     / previous_total
 
                 )
+
                 * 100
 
             )
@@ -629,6 +748,7 @@ def get_reports_trend():
                 ),
 
                 "direction": direction
+
             }
 
         }), 200
@@ -688,6 +808,7 @@ def get_report(
     }), 200
 
 
+
 @reports_bp.route(
     "",
     methods=["POST"]
@@ -737,6 +858,7 @@ def create_report():
             )
 
         }), 400
+
 
 
     if not image:
@@ -799,6 +921,7 @@ def create_report():
         }), 404
 
 
+
     destination = Destination.query.get(
         destination_id
     )
@@ -817,6 +940,7 @@ def create_report():
         }), 404
 
 
+
     original_filename = secure_filename(
         image.filename
     )
@@ -828,12 +952,18 @@ def create_report():
 
 
     filename = (
-        f"{timestamp}_{original_filename}"
+
+        f"{timestamp}_"
+        f"{original_filename}"
+
     )
 
 
     image_path = (
-        UPLOAD_FOLDER / filename
+
+        UPLOAD_FOLDER
+        / filename
+
     )
 
 
@@ -841,28 +971,36 @@ def create_report():
         image_path
     )
 
+
+
     try:
 
 
 
         yolo_result = (
+
             analyze_photo_for_trash(
                 str(image_path)
             )
+
         )
 
 
         detected_count = (
+
             yolo_result[
                 "detected_count"
             ]
+
         )
 
 
         score = (
+
             yolo_result[
                 "score"
             ]
+
         )
 
 
@@ -873,8 +1011,10 @@ def create_report():
             destination_id=destination_id,
 
             image_url=(
+
                 f"/uploads/reports/"
                 f"{filename}"
+
             ),
 
             user_notes=user_notes,
@@ -886,6 +1026,7 @@ def create_report():
             ),
 
             score=score
+
         )
 
 
@@ -897,15 +1038,16 @@ def create_report():
         db.session.flush()
 
 
-        cleanliness_score = (
+        cleanliness_result = (
+
             update_cleanliness_score(
                 destination_id
             )
+
         )
 
 
         db.session.commit()
-
 
         return jsonify({
 
@@ -922,9 +1064,23 @@ def create_report():
                 ),
 
                 "cleanliness_score": round(
-                    cleanliness_score,
+
+                    cleanliness_result[
+                        "cleanliness_score"
+                    ],
+
                     4
+
+                ),
+
+                "cleanliness_status": (
+
+                    cleanliness_result[
+                        "cleanliness_status"
+                    ]
+
                 )
+
             }
 
         }), 201
@@ -932,10 +1088,10 @@ def create_report():
 
     except Exception as e:
 
-
         db.session.rollback()
 
 
+        # Hapus gambar kalau proses gagal
         if image_path.exists():
 
             image_path.unlink()
@@ -952,7 +1108,6 @@ def create_report():
             "error": str(e)
 
         }), 500
-
 
 
 @reports_bp.route(
@@ -982,12 +1137,14 @@ def update_report(
 
 
     data = (
+
         request.get_json(
             silent=True
         )
-        or {}
-    )
 
+        or {}
+
+    )
 
 
     if "user_notes" in data:
@@ -1016,8 +1173,10 @@ def update_report(
 
 
         if (
+
             data["status"]
             not in allowed_status
+
         ):
 
             return jsonify({
@@ -1101,14 +1260,12 @@ def delete_report(
         }), 404
 
 
-    # Simpan destination sebelum report dihapus
     destination_id = (
         report.destination_id
     )
 
 
     try:
-
 
 
         db.session.delete(
@@ -1119,10 +1276,12 @@ def delete_report(
         db.session.flush()
 
 
-        cleanliness_score = (
+        cleanliness_result = (
+
             update_cleanliness_score(
                 destination_id
             )
+
         )
 
         db.session.commit()
@@ -1139,8 +1298,21 @@ def delete_report(
             "data": {
 
                 "cleanliness_score": round(
-                    cleanliness_score,
+
+                    cleanliness_result[
+                        "cleanliness_score"
+                    ],
+
                     4
+
+                ),
+
+                "cleanliness_status": (
+
+                    cleanliness_result[
+                        "cleanliness_status"
+                    ]
+
                 )
 
             }
@@ -1202,12 +1374,17 @@ def get_latest_reports():
 
 
         reports = (
+
             Report.query
+
             .order_by(
                 Report.created_at.desc()
             )
+
             .limit(limit)
+
             .all()
+
         )
 
 
