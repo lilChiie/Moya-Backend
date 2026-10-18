@@ -54,6 +54,10 @@ def create_app():
     # Blueprint Spots
     from api.routes.spots import spot_bp
     app.register_blueprint(spot_bp, url_prefix='/api/spots')
+
+    # Blueprint Clean Reports
+    from api.routes.clean_reports import clean_reports_bp
+    app.register_blueprint(clean_reports_bp, url_prefix='/api/clean-reports')
     
     return app
 

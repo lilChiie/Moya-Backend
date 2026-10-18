@@ -4,6 +4,7 @@ from models.destination import Destination
 from models.accessibility import Accessibility
 from models.tourism import Tourism
 from models.rank import Rank
+from models.clean_report import CleanReport
 
 class Report(db.Model):
     __tablename__ = "reports"
