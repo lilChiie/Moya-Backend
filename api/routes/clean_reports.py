@@ -9,6 +9,7 @@ from models.user import User
 from models.destination import Destination
 from models.clean_report import CleanReport
 from models.notification import Notification
+from api.routes.reports import update_cleanliness_score
 
 
 clean_reports_bp = Blueprint('clean_reports', __name__)
@@ -246,11 +247,12 @@ def verify_clean_report(report_id):
         if new_status == "verified":
             report.verified_at = datetime.utcnow()
 
-            # Reset cleanliness_status destinasi ke default ("Safe")
-            destination = Destination.query.get(report.destination_id)
-            if destination:
-                destination.cleanliness_status = "Safe"
-                destination.cleanliness_score = 0.5000
+            # Hitung ulang cleanliness_score dengan logika baseline:
+            # hanya laporan kotor SETELAH verified_at yang dihitung.
+            # update_cleanliness_score() membaca CleanReport.verified_at
+            # yang baru saja diisi di atas.
+            db.session.flush()  # pastikan verified_at tersimpan dulu ke session
+            update_cleanliness_score(report.destination_id)
 
         db.session.flush()
 
