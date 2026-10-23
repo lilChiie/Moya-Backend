@@ -12,6 +12,7 @@ from api.models import (
 
 from api.ai.yolo import analyze_photo_for_trash
 from models.notification import Notification
+from models.clean_report import CleanReport
 
 
 reports_bp = Blueprint(
@@ -108,7 +109,15 @@ def update_cleanliness_score(
 ):
     """
     Menghitung ulang kebersihan suatu destination
-    berdasarkan seluruh report yang dimiliki destination tersebut.
+    dengan logika baseline:
+
+    Hanya report kotor yang dibuat SETELAH
+    CleanReport terakhir yang diverifikasi admin
+    yang dihitung dalam perhitungan skor.
+
+    Jika tidak ada laporan kotor aktif (pasca
+    verifikasi bersih), destinasi dianggap
+    bersih sempurna (score = 1.0, status = Safe).
 
     Report score:
         0.10 = sedikit sampah
@@ -123,7 +132,7 @@ def update_cleanliness_score(
     Rumus:
 
         average_severity =
-            total severity / jumlah report
+            total severity / jumlah report aktif
 
         cleanliness_score =
             1 - average_severity
@@ -154,21 +163,49 @@ def update_cleanliness_score(
         )
 
 
-    reports = (
+    # Cari CleanReport terakhir yang sudah
+    # diverifikasi admin untuk destinasi ini.
+    # verified_at menjadi baseline: laporan kotor
+    # sebelum tanggal ini dianggap sudah ditangani.
+    latest_clean = (
+        CleanReport.query
+        .filter_by(
+            destination_id=destination_id,
+            status="verified"
+        )
+        .filter(
+            CleanReport.verified_at.isnot(None)
+        )
+        .order_by(
+            CleanReport.verified_at.desc()
+        )
+        .first()
+    )
+
+
+    # Ambil hanya laporan kotor yang masuk
+    # SETELAH pembersihan terakhir diverifikasi.
+    query = (
         Report.query
         .filter_by(
             destination_id=destination_id
         )
-        .all()
     )
 
+    if latest_clean:
+        query = query.filter(
+            Report.created_at
+            > latest_clean.verified_at
+        )
 
+    reports = query.all()
 
 
     if not reports:
 
-        # Belum ada laporan
-        cleanliness_score = 0.50
+        # Tidak ada laporan kotor aktif:
+        # destinasi dianggap bersih sempurna.
+        cleanliness_score = 1.00
 
 
     else:
