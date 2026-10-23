@@ -14,7 +14,7 @@ from api.ai.yolo import analyze_photo_for_trash
 from models.notification import Notification
 from models.clean_report import CleanReport
 
-
+#REPORT KHUSUS SAMPAH
 reports_bp = Blueprint(
     "reports",
     __name__

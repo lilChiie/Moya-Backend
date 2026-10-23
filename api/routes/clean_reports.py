@@ -128,7 +128,6 @@ def create_clean_report():
         return jsonify({
             "success": True,
             "message": "Clean report submitted successfully",
-            "data": clean_report.to_dict()
         }), 201
 
     except Exception as e:
