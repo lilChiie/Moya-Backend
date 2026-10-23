@@ -1,6 +1,7 @@
 from api.extensions import db
 from datetime import datetime
 from flask import request
+from api.utils import now_wib
 
 class Rank(db.Model):
     __tablename__ = 'ranks'
@@ -10,8 +11,8 @@ class Rank(db.Model):
     min_point = db.Column(db.Integer, nullable=True)
     max_point = db.Column(db.Integer, nullable=True)
     avatar = db.Column(db.String(255), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_wib)
+    updated_at = db.Column(db.DateTime, default=now_wib, onupdate=now_wib)
 
     def to_dict(self):
         avatar_url = self.avatar

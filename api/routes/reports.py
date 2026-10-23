@@ -13,6 +13,7 @@ from api.models import (
 from api.ai.yolo import analyze_photo_for_trash
 from models.notification import Notification
 from models.clean_report import CleanReport
+from api.utils import now_wib, today_wib
 
 #REPORT KHUSUS SAMPAH
 reports_bp = Blueprint(
@@ -53,49 +54,44 @@ def allowed_file(filename):
 
 
 def report_to_dict(report):
+    clean_list = []
+    if hasattr(report, 'clean_reports') and report.clean_reports:
+        clean_list = [c.to_dict() for c in report.clean_reports]
 
     return {
-
         "id": report.id,
-
         "user_id": report.user_id,
-
         "destination_id": (
             report.destination_id
         ),
-
+        "destination_name": (
+            report.destination.name if report.destination else None
+        ),
         "image_url": (
             report.image_url
         ),
-
         "user_notes": (
             report.user_notes
         ),
-
-        "admin_notes": (
-            report.admin_notes
-        ),
-
         "status": (
             report.status
         ),
-
+        "is_cleaned": len(clean_list) > 0,
+        "clean_reports_count": len(clean_list),
+        "clean_reports": clean_list,
         "detected_count": (
             report.detected_count
         ),
-
         "score": (
             float(report.score)
             if report.score is not None
             else 0.0
         ),
-
         "created_at": (
             report.created_at.isoformat()
             if report.created_at
             else None
         ),
-
         "updated_at": (
             report.updated_at.isoformat()
             if report.updated_at
@@ -108,16 +104,14 @@ def update_cleanliness_score(
     destination_id
 ):
     """
-    Menghitung ulang kebersihan suatu destination
-    dengan logika baseline:
+    Menghitung ulang kebersihan suatu destination.
 
-    Hanya report kotor yang dibuat SETELAH
-    CleanReport terakhir yang diverifikasi admin
-    yang dihitung dalam perhitungan skor.
+    Logika:
+    Hanya laporan kotor yang BELUM berstatus 'resolved' (belum diverifikasi selesai oleh admin)
+    yang dihitung sebagai laporan kotor aktif penentu skor kebersihan.
 
-    Jika tidak ada laporan kotor aktif (pasca
-    verifikasi bersih), destinasi dianggap
-    bersih sempurna (score = 1.0, status = Safe).
+    Jika semua laporan kotor sudah berstatus 'resolved' (atau belum ada laporan kotor sama sekali),
+    destinasi dianggap bersih sempurna (score = 1.0, status = Safe).
 
     Report score:
         0.10 = sedikit sampah
@@ -130,75 +124,31 @@ def update_cleanliness_score(
         semakin kotor.
 
     Rumus:
-
-        average_severity =
-            total severity / jumlah report aktif
-
-        cleanliness_score =
-            1 - average_severity
-
+        average_severity = total severity / jumlah report aktif
+        cleanliness_score = 1 - average_severity
 
     Status:
-
-        0.70 - 1.00
-            Safe
-
-        0.40 - < 0.70
-            Needs Attention
-
-        0.00 - < 0.40
-            Needs Handling
+        0.70 - 1.00 : Safe
+        0.40 - < 0.70: Needs Attention
+        0.00 - < 0.40: Needs Handling
     """
-
 
     destination = Destination.query.get(
         destination_id
     )
 
-
     if not destination:
-
         raise ValueError(
             "Destination not found"
         )
 
-
-    # Cari CleanReport terakhir yang sudah
-    # diverifikasi admin untuk destinasi ini.
-    # verified_at menjadi baseline: laporan kotor
-    # sebelum tanggal ini dianggap sudah ditangani.
-    latest_clean = (
-        CleanReport.query
-        .filter_by(
-            destination_id=destination_id,
-            status="verified"
-        )
-        .filter(
-            CleanReport.verified_at.isnot(None)
-        )
-        .order_by(
-            CleanReport.verified_at.desc()
-        )
-        .first()
-    )
-
-
-    # Ambil hanya laporan kotor yang masuk
-    # SETELAH pembersihan terakhir diverifikasi.
-    query = (
+    # Ambil laporan kotor aktif: yang belum berstatus 'resolved'
+    reports = (
         Report.query
-        .filter_by(
-            destination_id=destination_id
-        )
+        .filter_by(destination_id=destination_id)
+        .filter(Report.status != 'resolved')
+        .all()
     )
-
-    if latest_clean:
-        query = query.filter(
-            Report.created_at
-            > latest_clean.verified_at
-        )
-
-    reports = query.all()
 
 
     if not reports:
@@ -362,7 +312,7 @@ def get_reports_trend():
 
     try:
 
-        today = datetime.now().date()
+        today = today_wib()
 
 
         if period == "daily":
@@ -984,7 +934,7 @@ def create_report():
     )
 
 
-    timestamp = datetime.now().strftime(
+    timestamp = now_wib().strftime(
         "%Y%m%d_%H%M%S_%f"
     )
 
@@ -1199,14 +1149,6 @@ def update_report(
             data["user_notes"]
         )
 
-
-    if "admin_notes" in data:
-
-        report.admin_notes = (
-            data["admin_notes"]
-        )
-
-
     if "status" in data:
 
         allowed_status = {
@@ -1240,9 +1182,10 @@ def update_report(
             data["status"]
         )
 
+        db.session.flush()
+        update_cleanliness_score(report.destination_id)
 
     try:
-
         db.session.commit()
 
 

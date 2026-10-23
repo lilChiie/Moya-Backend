@@ -261,10 +261,6 @@ def get_spot(id):
                     report.status
                 ),
 
-                "admin_notes": (
-                    report.admin_notes
-                ),
-
                 "user_notes": (
                     report.user_notes
                 ),

@@ -2,14 +2,13 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 from pathlib import Path
-from datetime import datetime
 
 from api.extensions import db
+from api.utils import now_wib
+from api.models import Report
 from models.user import User
-from models.destination import Destination
 from models.clean_report import CleanReport
 from models.notification import Notification
-from api.routes.reports import update_cleanliness_score
 
 
 clean_reports_bp = Blueprint('clean_reports', __name__)
@@ -28,21 +27,21 @@ def allowed_file(filename):
     )
 
 
-# POST /api/clean-reports  — User melaporkan destinasi sudah bersih
+# POST /api/clean-reports  — User me-reply laporan kotor dengan bukti kebersihan
 @clean_reports_bp.route("", methods=["POST"])
 @jwt_required()
 def create_clean_report():
     user_id = int(get_jwt_identity())
 
-    destination_id = request.form.get("destination_id")
+    report_id = request.form.get("report_id")
     notes = request.form.get("notes")
     image_url = request.files.get("image_url")
 
     # Validasi
-    if not destination_id:
+    if not report_id:
         return jsonify({
             "success": False,
-            "message": "destination_id is required"
+            "message": "report_id is required"
         }), 400
 
     if not image_url:
@@ -63,7 +62,7 @@ def create_clean_report():
             "message": "Only JPG, JPEG, PNG, and WEBP images are allowed"
         }), 400
 
-    # Cek relasi user & destination
+    # Cek relasi user & report
     user = User.query.get(user_id)
     if not user:
         return jsonify({
@@ -71,16 +70,16 @@ def create_clean_report():
             "message": "User not found"
         }), 404
 
-    destination = Destination.query.get(destination_id)
-    if not destination:
+    report = Report.query.get(report_id)
+    if not report:
         return jsonify({
             "success": False,
-            "message": "Destination not found"
+            "message": "Report not found"
         }), 404
 
     # Simpan gambar
     original_filename = secure_filename(image_url.filename)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    timestamp = now_wib().strftime("%Y%m%d_%H%M%S_%f")
     filename = f"{timestamp}_{original_filename}"
     image_path = UPLOAD_FOLDER / filename
 
@@ -89,13 +88,16 @@ def create_clean_report():
     try:
         clean_report = CleanReport(
             user_id=user_id,
-            destination_id=destination_id,
+            report_id=int(report_id),
             image_url=f"/static/uploads/clean_reports/{filename}",
-            notes=notes,
-            status="pending"
+            notes=notes
         )
         db.session.add(clean_report)
         db.session.flush()
+
+        destination_name = (
+            report.destination.name if report.destination else "Unknown"
+        )
 
         # Notifikasi ke user: laporan diterima
         notif_user = Notification(
@@ -103,8 +105,7 @@ def create_clean_report():
             title="Laporan Kebersihan Dikirim",
             description=(
                 f"Laporan kebersihan untuk destinasi "
-                f"\"{destination.name}\" berhasil dikirim "
-                f"dan sedang menunggu verifikasi admin."
+                f"\"{destination_name}\" berhasil dikirim."
             )
         )
         db.session.add(notif_user)
@@ -117,8 +118,7 @@ def create_clean_report():
                 title="Laporan Kebersihan Baru",
                 description=(
                     f"User \"{user.name}\" melaporkan bahwa destinasi "
-                    f"\"{destination.name}\" sudah bersih. "
-                    f"Silakan verifikasi laporan ini."
+                    f"\"{destination_name}\" sudah bersih."
                 )
             )
             db.session.add(notif_admin)
@@ -128,6 +128,7 @@ def create_clean_report():
         return jsonify({
             "success": True,
             "message": "Clean report submitted successfully",
+            "data": clean_report.to_dict()
         }), 201
 
     except Exception as e:
@@ -148,12 +149,12 @@ def create_clean_report():
 @clean_reports_bp.route("", methods=["GET"])
 @jwt_required()
 def get_clean_reports():
-    status_filter = request.args.get("status")
+    report_id_filter = request.args.get("report_id")
 
     query = CleanReport.query.order_by(CleanReport.created_at.desc())
 
-    if status_filter:
-        query = query.filter_by(status=status_filter)
+    if report_id_filter:
+        query = query.filter_by(report_id=int(report_id_filter))
 
     reports = query.all()
 
@@ -200,95 +201,28 @@ def get_clean_report(report_id):
     }), 200
 
 
-# PUT /api/clean-reports/<id>/verify  — Admin verifikasi laporan
-@clean_reports_bp.route("/<int:report_id>/verify", methods=["PUT"])
+# GET /api/clean-reports/by-report/<report_id>  — Semua laporan bersih untuk 1 laporan kotor
+@clean_reports_bp.route("/by-report/<int:dirty_report_id>", methods=["GET"])
 @jwt_required()
-def verify_clean_report(report_id):
-    """
-    Admin memverifikasi laporan kebersihan.
-    JSON body:
-        - status      (required): "verified" atau "rejected"
-        - admin_notes (optional): catatan admin
-    
-    Ketika status diubah ke "verified":
-        - cleanliness_status destinasi kembali ke default ("Safe")
-        - Nanti bagian DSS akan memproses perubahan poin (bukan scope API ini)
-    """
-    user_id = int(get_jwt_identity())
-    admin = User.query.get(user_id)
-
-    if not admin or admin.role != 'admin':
-        return jsonify({
-            "success": False,
-            "message": "Only admin can verify reports"
-        }), 403
-
-    report = CleanReport.query.get(report_id)
+def get_clean_reports_by_report(dirty_report_id):
+    report = Report.query.get(dirty_report_id)
     if not report:
         return jsonify({
             "success": False,
-            "message": "Clean report not found"
+            "message": "Report not found"
         }), 404
 
-    data = request.get_json(silent=True) or {}
-    new_status = data.get("status")
+    clean_reports = (
+        CleanReport.query
+        .filter_by(report_id=dirty_report_id)
+        .order_by(CleanReport.created_at.desc())
+        .all()
+    )
 
-    if new_status not in ("verified", "rejected"):
-        return jsonify({
-            "success": False,
-            "message": "Status must be 'verified' or 'rejected'"
-        }), 400
-
-    try:
-        report.status = new_status
-        report.admin_notes = data.get("admin_notes", report.admin_notes)
-
-        if new_status == "verified":
-            report.verified_at = datetime.utcnow()
-
-            # Hitung ulang cleanliness_score dengan logika baseline:
-            # hanya laporan kotor SETELAH verified_at yang dihitung.
-            # update_cleanliness_score() membaca CleanReport.verified_at
-            # yang baru saja diisi di atas.
-            db.session.flush()  # pastikan verified_at tersimpan dulu ke session
-            update_cleanliness_score(report.destination_id)
-
-        db.session.flush()
-
-        # ── Notifikasi ke user pelapor ────────────
-        if new_status == "verified":
-            notif_msg = (
-                f"Laporan kebersihan Anda untuk destinasi "
-                f"\"{report.destination.name}\" telah diverifikasi oleh admin. "
-                f"Terima kasih atas kontribusi Anda!"
-            )
-        else:
-            notif_msg = (
-                f"Laporan kebersihan Anda untuk destinasi "
-                f"\"{report.destination.name}\" ditolak oleh admin."
-            )
-            if data.get("admin_notes"):
-                notif_msg += f" Catatan: {data['admin_notes']}"
-
-        notif = Notification(
-            user_id=report.user_id,
-            title="Update Laporan Kebersihan",
-            description=notif_msg
-        )
-        db.session.add(notif)
-
-        db.session.commit()
-
-        return jsonify({
-            "success": True,
-            "message": f"Clean report {new_status} successfully",
-            "data": report.to_dict()
-        }), 200
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({
-            "success": False,
-            "message": "Failed to verify clean report",
-            "error": str(e)
-        }), 500
+    return jsonify({
+        "success": True,
+        "report_id": dirty_report_id,
+        "destination_name": report.destination.name if report.destination else None,
+        "total_clean_reports": len(clean_reports),
+        "data": [r.to_dict() for r in clean_reports]
+    }), 200

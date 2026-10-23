@@ -1,6 +1,7 @@
 from api.extensions import db
 from datetime import datetime
 from flask import request
+from api.utils import now_wib
 
 destination_tourisms = db.Table('destination_tourisms',
     db.Column('destination_id', db.Integer, db.ForeignKey('destinations.id'), primary_key=True),
@@ -28,8 +29,8 @@ class Destination(db.Model):
     opening_time = db.Column(db.Time, nullable=True)
     closing_time = db.Column(db.Time, nullable=True)
     image_url = db.Column(db.String(255), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_wib)
+    updated_at = db.Column(db.DateTime, default=now_wib, onupdate=now_wib)
 
     tourisms = db.relationship('Tourism', secondary=destination_tourisms, lazy='subquery', backref=db.backref('destinations', lazy=True))
     accessibilities = db.relationship('Accessibility', secondary=destination_accessibilities, lazy='subquery', backref=db.backref('destinations', lazy=True))

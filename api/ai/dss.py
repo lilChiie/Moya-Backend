@@ -5,7 +5,6 @@ from api.models import (
     Destination,
     Report
 )
-from models.clean_report import CleanReport
 from models.destination import destination_tourisms, destination_accessibilities
 from api.extensions import db
 
@@ -267,11 +266,10 @@ def run_dss(
 
         Nilai ini diperbarui setiap kali:
           - Ada laporan kotor (Report) baru masuk
-          - Admin memverifikasi CleanReport
+          - Ada laporan bersih (CleanReport) yang me-reply laporan kotor
 
-        Dengan sistem CleanReport + verified_at sebagai baseline,
-        laporan kotor lama yang sudah dibersihkan tidak terus
-        menekan skor.
+        Laporan kotor yang sudah di-reply dengan bukti bersih dianggap
+        sudah ditangani sehingga tidak lagi menekan skor kebersihan destinasi.
 
     Hasil:
         TOP 5 destinasi dengan score tertinggi.

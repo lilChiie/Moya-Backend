@@ -5,6 +5,7 @@ from models.accessibility import Accessibility
 from models.tourism import Tourism
 from models.rank import Rank
 from models.clean_report import CleanReport
+from api.utils import now_wib
 
 class Report(db.Model):
     __tablename__ = "reports"
@@ -16,7 +17,6 @@ class Report(db.Model):
     )
     image_url = db.Column(db.String(255), nullable=False)
     user_notes = db.Column(db.Text)
-    admin_notes = db.Column(db.Text)
     status = db.Column(
         db.Enum("pending", "process", "resolved"),
         nullable=False,
@@ -25,13 +25,14 @@ class Report(db.Model):
     detected_count = db.Column(db.Integer, nullable=False, default=0)
     score = db.Column(db.Numeric(4, 2), nullable=False, default=0.00)
     created_at = db.Column(
-        db.DateTime, nullable=False, server_default=db.func.current_timestamp()
+        db.DateTime, nullable=False, default=now_wib, server_default=db.func.current_timestamp()
     )
     updated_at = db.Column(
         db.DateTime,
         nullable=False,
-        server_default=db.func.current_timestamp(),
-        onupdate=db.func.current_timestamp()
+        default=now_wib,
+        onupdate=now_wib,
+        server_default=db.func.current_timestamp()
     )
 
     user = db.relationship("User", backref="reports")
@@ -47,7 +48,7 @@ class Review(db.Model):
         db.Integer, db.ForeignKey("destinations.id"), nullable=False
     )
     comment = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
+    created_at = db.Column(db.DateTime, default=now_wib, server_default=db.func.current_timestamp())
 
     user = db.relationship("User", backref="reviews")
     destination = db.relationship("Destination", backref="reviews")
@@ -63,11 +64,12 @@ class UserPoint(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     review_id = db.Column(db.Integer, db.ForeignKey("reviews.id"), nullable=False)
     points = db.Column(db.Integer, nullable=False, default=0)
-    created_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
+    created_at = db.Column(db.DateTime, default=now_wib, server_default=db.func.current_timestamp())
     updated_at = db.Column(
         db.DateTime,
-        server_default=db.func.current_timestamp(),
-        onupdate=db.func.current_timestamp()
+        default=now_wib,
+        onupdate=now_wib,
+        server_default=db.func.current_timestamp()
     )
 
     user = db.relationship("User", backref="points")
@@ -82,7 +84,7 @@ class UserVisit(db.Model):
     destination_id = db.Column(
         db.Integer, db.ForeignKey("destinations.id"), nullable=False
     )
-    visited_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
+    visited_at = db.Column(db.DateTime, default=now_wib, server_default=db.func.current_timestamp())
 
     user = db.relationship("User", backref="visits")
     destination = db.relationship("Destination", backref="visits")
@@ -100,11 +102,12 @@ class RecomRequest(db.Model):
     budget = db.Column(db.Numeric(12, 2), default=0.00)
     duration_minutes = db.Column(db.Integer)
     max_distance_km = db.Column(db.Numeric(8, 2))
-    created_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
+    created_at = db.Column(db.DateTime, default=now_wib, server_default=db.func.current_timestamp())
     updated_at = db.Column(
         db.DateTime,
-        server_default=db.func.current_timestamp(),
-        onupdate=db.func.current_timestamp()
+        default=now_wib,
+        onupdate=now_wib,
+        server_default=db.func.current_timestamp()
     )
 
     user = db.relationship("User", backref="recom_requests")
@@ -129,7 +132,7 @@ class RecomResult(db.Model):
         db.Integer, db.ForeignKey("destinations.id"), nullable=False
     )
     reason = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
+    created_at = db.Column(db.DateTime, default=now_wib, server_default=db.func.current_timestamp())
 
     request = db.relationship("RecomRequest", back_populates="results")
     destination = db.relationship("Destination", backref="recom_results")
@@ -150,7 +153,7 @@ class Itinerary(db.Model):
     total_duration = db.Column(db.Integer)
     total_cost = db.Column(db.Numeric(12, 2), default=0.00)
     detected_count = db.Column(db.Integer, default=0)
-    created_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
+    created_at = db.Column(db.DateTime, default=now_wib, server_default=db.func.current_timestamp())
 
     user = db.relationship("User", backref="itineraries")
     recom_request = db.relationship("RecomRequest", back_populates="itineraries")
@@ -174,8 +177,9 @@ class ItineraryItem(db.Model):
     duration_minutes = db.Column(db.Integer)
     updated_at = db.Column(
         db.DateTime,
-        server_default=db.func.current_timestamp(),
-        onupdate=db.func.current_timestamp()
+        default=now_wib,
+        onupdate=now_wib,
+        server_default=db.func.current_timestamp()
     )
 
     itinerary = db.relationship("Itinerary", back_populates="items")

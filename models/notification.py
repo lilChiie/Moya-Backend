@@ -1,5 +1,5 @@
 from api.extensions import db
-from datetime import datetime
+from api.utils import now_wib
 
 class Notification(db.Model):
     __tablename__ = 'notifications'
@@ -9,7 +9,7 @@ class Notification(db.Model):
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text, nullable=True)
     is_read = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_wib)
     
     user = db.relationship('User', backref=db.backref('notifications', lazy=True))
 
